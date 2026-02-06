@@ -1,0 +1,55 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    triggers {
+        githubPush()
+    }
+
+    environment {
+        CONFTEST_VERSION = '0.56.0'
+    }
+
+    stages {
+
+        stage('Install Conftest') {
+            steps {
+                sh '''
+                set -e
+
+                curl -L https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Darwin_x86_64.tar.gz \
+                  | tar xz
+
+                chmod +x conftest
+                ./conftest --version
+                '''
+            }
+        }
+
+        stage('Run Policy Tests') {
+            steps {
+                dir('01-eks-gatekeeper') {
+                    sh '''
+                    ../conftest test tests --policy policies
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Policy checks PASSED"
+        }
+        failure {
+            echo "❌ Policy checks FAILED"
+        }
+        always {
+            cleanWs()
+        }
+    }
+}
